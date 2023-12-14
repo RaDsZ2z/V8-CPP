@@ -1,7 +1,3 @@
-将V8源码编译成VS项目后
-
-此代码直接运行在hello-world.cc中
-```cpp
 // Copyright 2015 the V8 project authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
@@ -210,7 +206,12 @@ class Point {
  public:
   int x, y;
 
-  Point(int x, int y) : x(x), y(y) {}
+  Point(int x, int y) : x(x), y(y) {
+    std::cout << "Call Point()\n";
+  }
+  ~Point() {
+    std::cout << "Call ~Point()\n";
+  }
 
   void Print() { std::cout << "Point(" << x << ", " << y << ")" << std::endl; }
 };
@@ -392,6 +393,7 @@ void test(const char* argv0) {
           .Check();
       ExecuteScript(isolate, "a_num;");
     }
+
     //5. C++变量暴露给js (类)
     {
       // 在此处执行JavaScript代码
@@ -407,6 +409,7 @@ void test(const char* argv0) {
 
       // Convert the result to an UTF8 string and print it.
       v8::String::Utf8Value utf8(isolate, result);
+      //根据输出来看，js中调用的C++类不会自动调用析构函数
       // printf("%s\n", *utf8);
     }
   }
@@ -428,5 +431,3 @@ int main(int argc, char* argv[]) {
 
 #undef CHECK
 #undef DCHECK
-
-```
