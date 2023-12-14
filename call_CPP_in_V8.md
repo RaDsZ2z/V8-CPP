@@ -1,3 +1,7 @@
+将V8源码编译成VS项目后
+
+此代码直接运行在hello-world.cc中
+```cpp
 // Copyright 2015 the V8 project authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
@@ -431,3 +435,6 @@ int main(int argc, char* argv[]) {
 
 #undef CHECK
 #undef DCHECK
+
+
+```
