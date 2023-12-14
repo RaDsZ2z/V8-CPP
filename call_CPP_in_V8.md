@@ -184,11 +184,13 @@ void Add(const v8::FunctionCallbackInfo<v8::Value>& args) {
             .ToLocalChecked());
     return;
   }
-
+  //这里其实已经完成JS变量到C++变量的传递了
+  //args是在JS中输入的 这里得到了对应的C++变量
   if (args[0]->IsString() && args[1]->IsString()) {
     v8::String::Utf8Value str1(isolate, args[0]);
     v8::String::Utf8Value str2(isolate, args[1]);
     std::string result = std::string(*str1) + std::string(*str2);
+    //此处结果是C++的std::string 又通过下面的语句给JS设置了对应的返回值
     args.GetReturnValue().Set(
         v8::String::NewFromUtf8(isolate, result.c_str(),
                                 v8::NewStringType::kNormal)
@@ -216,11 +218,10 @@ class Point {
   ~Point() {
     std::cout << "Call ~Point()\n";
   }
-
   void Print() { std::cout << "Point(" << x << ", " << y << ")" << std::endl; }
 };
 
-// 胶水代码
+// 胶水代码 构造函数
 void Point_Constructor(const v8::FunctionCallbackInfo<v8::Value>& args) {
   v8::Isolate* isolate = args.GetIsolate();
 
@@ -268,6 +269,25 @@ void Point_Print(const v8::FunctionCallbackInfo<v8::Value>& args) {
   point->Print();
 }
 
+void Point_Delete(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  //仿照上面的 Point_Print
+
+  v8::Isolate* isolate = args.GetIsolate();
+  // 取出本地包装的C++ 对象
+  v8::Local<v8::Object> self = args.Holder();
+  Point* point =
+      static_cast<Point*>(self->GetAlignedPointerFromInternalField(0));
+
+  // 调用C++ 对象方法
+  // 清理资源
+  //std::cout << "Point_Delete()\n";
+  delete point;
+
+  // 清除引用，防止多次释放
+  self->SetInternalField(0, v8::Undefined(isolate));
+}
+
+//将上面三个函数注入？
 v8::Local<v8::FunctionTemplate> CreatePointTemplate(v8::Isolate* isolate) {
   v8::EscapableHandleScope handle_scope(isolate);
 
@@ -280,9 +300,14 @@ v8::Local<v8::FunctionTemplate> CreatePointTemplate(v8::Isolate* isolate) {
 
   // 添加原型方法
   v8::Local<v8::Signature> signature = v8::Signature::New(isolate, tpl);
-  v8::Local<v8::FunctionTemplate> printTpl = v8::FunctionTemplate::New(
+    //添加.Print
+  v8::Local<v8::FunctionTemplate> printTpl1 = v8::FunctionTemplate::New(
       isolate, Point_Print, v8::Local<v8::Value>(), signature);
-  tpl->PrototypeTemplate()->Set(isolate, "print", printTpl);
+  tpl->PrototypeTemplate()->Set(isolate, "print", printTpl1);
+    //添加.Delete
+  v8::Local<v8::FunctionTemplate> printTpl2 = v8::FunctionTemplate::New(
+      isolate, Point_Delete, v8::Local<v8::Value>(), signature);
+  tpl->PrototypeTemplate()->Set(isolate, "Delete", printTpl2);
 
   return handle_scope.Escape(tpl);
 }
@@ -309,14 +334,18 @@ void test(const char* argv0) {
   
   {
     v8::Isolate::Scope isolate_scope(isolate);  // 进入这个隔离环境的作用域
-    v8::HandleScope handle_scope(isolate);  // 用于管理JavaScript对象的内存
+    v8::HandleScope handle_scope(isolate);      // 用于管理JavaScript对象的内存
 
-    //------------
+
+
+    //--------------------------------------------
     //这里的三行是为了暴露C++的类加的
     v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate);
     v8::Local<v8::FunctionTemplate> ptTpl = CreatePointTemplate(isolate);
     global->Set(isolate, "Point", ptTpl);
-    //------------
+    //--------------------------------------------
+
+
 
     v8::Local<v8::Context> context = v8::Context::New(isolate, nullptr, global);
     //为了暴露C++类把下面这一行换成了上面这一行
@@ -402,7 +431,15 @@ void test(const char* argv0) {
     {
       // 在此处执行JavaScript代码
       v8::Local<v8::String> source = v8::String::NewFromUtf8Literal(
-          isolate, "let p = new Point(1,2);p.print();");
+          isolate, "let p = new Point(1,2);p.print();p.Delete()");
+      /*
+      //析构时把this指针置零了(应该，在上面的C++函数中有对应的代码)
+      //Delete()后 再print() 会触发错误
+      v8::Local<v8::String> source = v8::String::NewFromUtf8Literal(
+          isolate, "let p = new Point(1,2);p.print();p.Delete();p.print()");
+
+      */
+
 
       // Compile the source code.
       v8::Local<v8::Script> script =
@@ -416,6 +453,8 @@ void test(const char* argv0) {
       //根据输出来看，js中调用的C++类不会自动调用析构函数
       // printf("%s\n", *utf8);
     }
+
+
   }
 
   // 清理隔离环境
